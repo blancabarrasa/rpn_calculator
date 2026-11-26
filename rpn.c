@@ -15,11 +15,13 @@ int pop(int stack[], int *top)
     return popped;
 }
 
+// Introducing sequencing and skip
 enum TermType
 {
     NUMBER,
     OPERATION,
     SKIP,
+    SEQUENCE,
 };
 
 // representation of terms
@@ -28,7 +30,8 @@ struct Term
     enum TermType type;
     int value;
     char operator;
-    struct Term *next;
+    struct Term *left;
+    struct Term *right;
 };
 
 void pushTerm(struct Term *termStack[], int *termTop, struct Term *term)
@@ -44,15 +47,28 @@ struct Term *popTerm(struct Term *termStack[], int *termTop)
     return popped;
 }
 
+void freeTerm(struct Term *termPtr)
+{
+    if (termPtr == NULL)
+    {
+        return;
+    }
+    freeTerm(termPtr->left);
+    freeTerm(termPtr->right);
+    free(termPtr);
+}
+
 int main(void)
 {
+    // Continuation stack
     struct Term *termStack[100];
     int termTop = 0;
+
+    // Integer stack
     int stack[100];
     int top = 0;
 
     struct Term *head = NULL;
-    struct Term *tail = NULL;
 
     char input[100];
 
@@ -63,80 +79,50 @@ int main(void)
 
     while (token != NULL)
     {
+        struct Term *newTerm = malloc(sizeof(struct Term));
+        if (newTerm == NULL)
+        {
+            printf("Error, null pointer");
+            return 1;
+        }
+        newTerm->left = NULL;
+        newTerm->right = NULL;
         if (strcmp(token, "+") == 0 ||
             strcmp(token, "-") == 0 ||
             strcmp(token, "*") == 0 ||
             strcmp(token, "/") == 0)
         {
-            struct Term *newTerm = malloc(sizeof(struct Term));
-            if (newTerm == NULL)
-            {
-                printf("Error, null pointer");
-                return 1;
-            }
-            else
-            {
-                newTerm->type = OPERATION;
-                newTerm->operator = token[0];
-                newTerm->next = NULL;
-                if (head == NULL)
-                {
-                    head = tail = newTerm;
-                }
-                else
-                {
-                    tail->next = newTerm;
-                    tail = newTerm;
-                }
-            }
+            newTerm->type = OPERATION;
+            newTerm->operator = token[0];
         }
         else if (strcmp(token, "SKIP") == 0)
         {
-            struct Term *newTerm = malloc(sizeof(struct Term));
-            if (newTerm == NULL)
-            {
-                printf("Error, null pointer");
-                return 1;
-            }
-            else
-            {
-                newTerm->type = SKIP;
-                newTerm->next = NULL;
-                if (head == NULL)
-                {
-                    head = tail = newTerm;
-                }
-                else
-                {
-                    tail->next = newTerm;
-                    tail = newTerm;
-                }
-            }
+
+            newTerm->type = SKIP;
         }
         else
         {
             int number = atoi(token);
-            struct Term *newTerm = malloc(sizeof(struct Term));
-            if (newTerm == NULL)
+
+            newTerm->type = NUMBER;
+            newTerm->value = number;
+        }
+        if (head == NULL)
+        {
+            head = newTerm;
+        }
+        else
+        {
+            struct Term *sequence = malloc(sizeof(struct Term));
+            if (sequence == NULL)
             {
                 printf("Error, null pointer");
                 return 1;
             }
-            else
-            {
-                newTerm->type = NUMBER;
-                newTerm->value = number;
-                newTerm->next = NULL;
-                if (head == NULL)
-                {
-                    head = tail = newTerm;
-                }
-                else
-                {
-                    tail->next = newTerm;
-                    tail = newTerm;
-                }
-            }
+            sequence->type = SEQUENCE;
+            sequence->left = head;
+            sequence->right = newTerm;
+            head = sequence;
         }
 
         token = strtok(NULL, " \n");
@@ -190,11 +176,12 @@ int main(void)
         {
             printf("SKIP\n");
         }
-
-        if (node->next != NULL)
+        if (node->type == SEQUENCE)
         {
-            pushTerm(termStack, &termTop, node->next);
+            pushTerm(termStack, &termTop, node->right);
+            pushTerm(termStack, &termTop, node->left);
         }
+
         if (termTop > 0)
         {
             node = popTerm(termStack, &termTop);
@@ -205,15 +192,7 @@ int main(void)
         }
     }
 
-    node = head;
-
-    while (node != NULL)
-    {
-        struct Term *nextPtr = node->next;
-
-        free(node);
-        node = nextPtr;
-    }
+    freeTerm(head);
 
     printf("Result: %d\n", stack[top - 1]);
 
